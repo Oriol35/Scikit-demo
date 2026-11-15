@@ -12,6 +12,11 @@ import streamlit as st
 
 ARREL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ARREL))
+# Streamlit Cloud torna a executar aquest fitxer quan s'actualitza el repositori, però pot
+# conservar a memòria versions antigues dels mòduls de src/. Els descartem perquè s'importi
+# sempre el codi actual (si no, apareixen errors com "cannot import name ...").
+for _mod in [m for m in sys.modules if m == "src" or m.startswith("src.")]:
+    del sys.modules[_mod]
 
 from src.cox import (NOMS_COVARIABLES, ajustar_cox, c_index, comprovar_ph,  # noqa: E402
                      preparar_estratificat, taula_hazard_ratios)

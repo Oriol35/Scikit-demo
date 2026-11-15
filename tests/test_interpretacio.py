@@ -1,10 +1,16 @@
-from src.interpretacio import conclusio_logrank, interpretar_hr, interpretar_ph, text_mediana
+from src.interpretacio import (conclusio_logrank, frase_grups, interpretar_hr, interpretar_ph,
+                               text_mediana)
 
 
 def test_conclusio_logrank_significatiu():
-    t = conclusio_logrank(1e-30, "tipus de contracte", millor="2 anys", pitjor="Mensual")
-    assert "significativament diferents" in t and "< 0,001" in t
-    assert "2 anys" in t and "Mensual" in t
+    t = conclusio_logrank(1e-30, "tipus de contracte")
+    assert "amb un 95 % de confiança" in t.lower() and "«tipus de contracte»" in t
+    assert "< 0,001" in t and "atzar" not in t
+
+
+def test_frase_grups_separada():
+    assert frase_grups("2 anys", "Mensual") == ("El grup que més es queda és **2 anys** i el que "
+                                                "més marxa, **Mensual**.")
 
 
 def test_conclusio_logrank_no_significatiu():

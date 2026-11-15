@@ -17,7 +17,7 @@ from src.cox import (NOMS_COVARIABLES, ajustar_cox, c_index, comprovar_ph,  # no
                      preparar_estratificat, taula_hazard_ratios)
 from src.grafics import (fig_corbes_client, fig_forest, fig_hazard, fig_km,  # noqa: E402
                          fig_risc_valor, traduir)
-from src.interpretacio import (conclusio_logrank, interpretar_hr,  # noqa: E402
+from src.interpretacio import (conclusio_logrank, frase_grups, interpretar_hr,  # noqa: E402
                                interpretar_ph, text_mediana)
 from src.km import (NOMS_VARIABLES, VARIABLES_KM, afegir_quartils_quota,  # noqa: E402
                     ajustar_km, logrank, taula_medianes)
@@ -113,12 +113,8 @@ with tabs[0]:
     c4.metric("Continuen al cap de 12 mesos", pct(float(km_g.predict(12))))
     st.plotly_chart(fig_km(ajustar_km(df), "Supervivència global dels clients (Kaplan-Meier)"),
                     **GRAFIC)
-    st.caption("**Per què no hi ha mediana?** La mediana és el mes en què la corba baixa del 50 %, "
-               "és a dir, quan la meitat dels clients ja ha marxat. Aquí la corba encara és per sobre "
-               "del 50 % al mes 72, l'últim que tenim observat: més de la meitat dels clients segueix "
-               "activa durant tot el període. No vol dir que la meitat no marxi mai, sinó que, si passa, "
-               "és més enllà de 72 mesos i les dades no ho poden dir. Per això es llegeix S(t) en "
-               "horitzons concrets (6, 12, 24 mesos).")
+    st.caption("La mediana global no s'assoleix: més de la meitat dels clients continuen actius "
+               "als 72 mesos. Per això es llegeix S(t) en horitzons concrets.")
 
 # ---------- 2. Kaplan-Meier ----------
 with tabs[1]:
@@ -134,20 +130,16 @@ with tabs[1]:
     ordre = med.sort_values("S_12m")
     signe = "" if lr["p_valor"] < 0.001 else "= "
     st.markdown(f"**Test log-rank:** χ² = {dec(lr['estadistic'], 1)} · p {signe}{pval(lr['p_valor'])}")
-    st.markdown(conclusio_logrank(lr["p_valor"], NOMS_VARIABLES[var].lower(),
-                                  millor=ordre["grup"].iloc[-1], pitjor=ordre["grup"].iloc[0]))
+    st.markdown(conclusio_logrank(lr["p_valor"], NOMS_VARIABLES[var].lower()))
+    if lr["p_valor"] < 0.05:
+        st.markdown(frase_grups(ordre["grup"].iloc[-1], ordre["grup"].iloc[0]))
     for c in ["S_6m", "S_12m", "S_24m"]:
         med[c] = med[c].map(pct)
     med["mediana"] = med["mediana"].map(text_mediana)
     st.dataframe(med.rename(columns={"grup": "Grup", "n": "Clients", "mediana": "Mediana (mesos)",
                                      "S_6m": "S(6)", "S_12m": "S(12)", "S_24m": "S(24)"}),
                  hide_index=True, width="stretch")
-    st.caption("**Com llegir-ho.** S(t) = percentatge de clients del grup que continua després de t mesos. "
-               "Mediana = mes en què marxa la meitat del grup; «> 72» vol dir que dins dels 72 mesos "
-               "observats el grup no arriba a perdre la meitat dels clients. La banda ombrejada és "
-               "l'interval de confiança del 95 %: la corba és una estimació feta amb una mostra, i la "
-               "banda indica on és probable que estigui la corba real (és més ampla on queden pocs "
-               "clients). Kaplan-Meier no extrapola: només descriu fins al mes 72, l'antiguitat màxima "
+    st.caption("Kaplan-Meier no extrapola: només descriu fins al mes 72, l'antiguitat màxima "
                "del dataset.")
 
 # ---------- 3. Model de Cox ----------
@@ -156,20 +148,19 @@ with tabs[2]:
     estrat = c1.toggle("Estratificat per tipus de contracte", value=False,
                        help="Permet una funció de risc base diferent per a cada contracte, "
                             "perquè el contracte viola el supòsit de riscos proporcionals.")
-    c2.metric("C-index (test)", f"{M['cindex']['test']:.3f}".replace(".", ","))
-    c3.metric("C-index (train)", f"{M['cindex']['train']:.3f}".replace(".", ","))
-    st.caption("**C-index:** de cada parell de clients comparables, percentatge de vegades que el model "
-               "dona més risc al que marxa abans (0,5 = atzar; 1 = perfecte). **Train** = 80 % de "
-               "clients amb què s'ha ajustat el model; **test** = 20 % reservat que el model no ha vist "
-               "mai, i és la mesura honesta de com prediria clients nous. Que tots dos siguin similars "
-               "indica que el model no està sobreajustat.")
+    c2.metric("C-index (test)", f"{M['cindex']['test']:.3f}".replace(".", ","),
+              help="Avaluat amb el 20 % de clients reservats que el model no ha vist mai: és la "
+                   "mesura honesta de com ordenaria clients nous. Indica el percentatge de parells "
+                   "de clients en què el model dona més risc al que marxa abans (0,5 = atzar; 1 = perfecte).")
+    c3.metric("C-index (train)", f"{M['cindex']['train']:.3f}".replace(".", ","),
+              help="Avaluat amb el 80 % de clients amb què s'ha ajustat el model. Es mostra per "
+                   "comparar-lo amb el de test: si fos molt més alt, el model estaria sobreajustat.")
     cph = M["cph_e"] if estrat else M["cph_tr"]
     titol = "Hazard ratios — Cox estratificat per contracte" if estrat else "Hazard ratios del model de Cox"
     st.plotly_chart(fig_forest(taula_hazard_ratios(cph), titol + " (IC 95 %)", NOMS_COVARIABLES),
                     **GRAFIC)
-    st.caption("Eix en escala logarítmica: un HR de 0,5 (risc a la meitat) i un de 2 (risc doble) "
-               "queden a la mateixa distància de l'1, de manera que els efectes protectors i els de risc "
-               "es poden comparar a simple vista. L'eix és el mateix amb i sense estratificar.")
+    st.caption("Escala logarítmica: els hazard ratios són multiplicacions del risc, i en aquesta "
+               "escala ×2 i ÷2 queden a la mateixa distància de l'1.")
     with st.expander("Taula dels hazard ratios amb interpretació"):
         hr = taula_hazard_ratios(cph)
         taula_hr = pd.DataFrame({

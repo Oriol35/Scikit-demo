@@ -54,8 +54,13 @@ def test_barra_lateral_calcula_exclosos():
 def test_textos_explicatius_valors_p():
     at = AppTest.from_file(APP, default_timeout=180).run()
     assert not at.exception
-    tot = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
-    assert "significativament diferents" in tot          # conclusió log-rank
+    md = [m.value for m in at.markdown]
+    caps = " ".join(c.value for c in at.caption)
+    assert any("95 % de confiança" in m for m in md)                     # conclusió log-rank
+    assert any(m.startswith("El grup que més es queda") for m in md)    # frase separada
+    assert "Com llegir-ho" not in caps and "no extrapola" in caps
     assert "Interpretació" in " ".join(str(d.value.columns.tolist()) for d in at.dataframe)
-    assert "72 mesos" in tot                               # límit temporal explicat
-    assert "test" in tot and "no ha vist" in tot           # explicació del C-index
+    ajudes = {m.label: m.proto.help for m in at.metric}
+    assert "no ha vist" in ajudes["C-index (test)"] and "ajustat" in ajudes["C-index (train)"]
+    assert "C-index:" not in caps                                         # ja no és un text llarg
+    assert "Per què no hi ha mediana" not in caps                         # Resum com abans

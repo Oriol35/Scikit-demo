@@ -9,18 +9,18 @@ def _p(p: float) -> str:
     return "p < 0,001" if p < 0.001 else f"p = {p:.3f}".replace(".", ",")
 
 
-def conclusio_logrank(p: float, variable: str, millor: str | None = None,
-                      pitjor: str | None = None) -> str:
+def conclusio_logrank(p: float, variable: str) -> str:
     """Conclusió del test log-rank (H0: totes les corbes de supervivència són iguals)."""
     if p < ALFA:
-        t = (f"**Conclusió:** les corbes són **significativament diferents** ({_p(p)}). "
-             f"La variable «{variable}» influeix en la permanència dels clients: si les corbes fossin "
-             "iguals, una diferència com aquesta passaria per atzar menys d'un 5 % de les vegades.")
-        if millor and pitjor:
-            t += f" El grup que més es queda és **{millor}** i el que més marxa, **{pitjor}**."
-        return t
+        return (f"**Conclusió:** les corbes són **significativament diferents** ({_p(p)}). "
+                f"Amb un 95 % de confiança podem dir que la variable «{variable}» influeix en la "
+                "permanència del client.")
     return (f"**Conclusió:** no hi ha prou evidència per dir que les corbes siguin diferents "
             f"({_p(p)} ≥ 0,05). Les diferències que es veuen poden ser fruit de l'atzar.")
+
+
+def frase_grups(millor: str, pitjor: str) -> str:
+    return f"El grup que més es queda és **{millor}** i el que més marxa, **{pitjor}**."
 
 
 def interpretar_hr(hr: float, p: float) -> str:

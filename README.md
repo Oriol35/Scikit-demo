@@ -13,6 +13,8 @@ outputs/     scores_supervivencia.csv (risc, supervivència i CLV per client)
 tests/       proves automàtiques (pytest)
 ```
 
+**Dashboard en línia:** https://telco-churn-oriol35.streamlit.app
+
 ## Posar-ho en marxa en qualsevol ordinador
 
 Requisit: **Python 3.11 o superior** (https://www.python.org/downloads/). La carpeta `.venv` no es

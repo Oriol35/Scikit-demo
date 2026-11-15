@@ -1,10 +1,10 @@
 # Guió de la demo — part de supervivència (≈ 6 min)
 
 **Abans de començar**
-- Obrir un terminal a `CasPràctic/` i executar:
-  `.venv\Scripts\python.exe -m streamlit run app/dashboard.py`
-- Esperar que carregui (≈ 10 s la primera vegada) i **plegar la barra lateral** (fletxa «<») per
-  guanyar amplada al projector.
+- Obrir **https://telco-churn-oriol35.streamlit.app** 5–10 minuts abans: si l'app estava aturada
+  per inactivitat, tarda ≈ 1 minut a despertar-se.
+- Alternativa local (sense internet): doble clic a `demo.bat`.
+- **Plegar la barra lateral** (fletxa «<») per guanyar amplada al projector.
 - Tenir oberta la carpeta `figures/` com a pla B (vegeu al final).
 
 ---

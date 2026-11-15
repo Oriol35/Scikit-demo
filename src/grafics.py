@@ -104,8 +104,11 @@ def fig_forest(taula_hr: pd.DataFrame, titol: str, noms: dict | None = None) -> 
                        "%{customdata[1]:.2f}<br>p = %{customdata[2]:.3g}<extra></extra>"),
         showlegend=False))
     fig.add_vline(x=1, line=dict(color=TEXT_SECUNDARI, width=1, dash="dot"))
-    ticks = [0.05, 0.1, 0.2, 0.5, 1, 2, 3, 5]
-    fig.update_xaxes(type="log", tickvals=ticks, ticktext=[f"{v:g}".replace(".", ",") for v in ticks])
+    # Escala logarítmica amb rang FIX: ÷2 i ×2 queden a la mateixa distància de l'1, i el model
+    # normal i l'estratificat es poden comparar sense que l'eix canviï en activar el toggle.
+    ticks = [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1, 1.5, 2, 3]
+    fig.update_xaxes(type="log", range=[np.log10(0.04), np.log10(4)], tickvals=ticks,
+                     ticktext=[f"{v:g}".replace(".", ",") for v in ticks])
     fig.update_layout(height=max(420, 34 * len(t) + 140))
     fig = _estil(fig, titol, "Hazard ratio (escala log.)  ·  < 1 redueix el risc de baixa  ·  > 1 l'augmenta", "")
     fig.update_yaxes(automargin=True)

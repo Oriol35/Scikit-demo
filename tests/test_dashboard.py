@@ -49,3 +49,13 @@ def test_simulador_sense_internet_limita_quota():
 def test_barra_lateral_calcula_exclosos():
     at = AppTest.from_file(APP, default_timeout=180).run()
     assert any("11 registres" in c.value for c in at.sidebar.caption)
+
+
+def test_textos_explicatius_valors_p():
+    at = AppTest.from_file(APP, default_timeout=180).run()
+    assert not at.exception
+    tot = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
+    assert "significativament diferents" in tot          # conclusió log-rank
+    assert "Interpretació" in " ".join(str(d.value.columns.tolist()) for d in at.dataframe)
+    assert "72 mesos" in tot                               # límit temporal explicat
+    assert "test" in tot and "no ha vist" in tot           # explicació del C-index

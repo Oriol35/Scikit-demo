@@ -29,3 +29,16 @@ def test_esglaons_coordenades_explicites():
     x, y = esglaons(np.array([0, 1, 3]), np.array([1.0, 0.8, 0.5]))
     assert list(x) == [0, 1, 1, 3, 3]
     assert list(y) == [1.0, 1.0, 0.8, 0.8, 0.5]
+
+
+def test_forest_eix_log_fix_en_tots_dos_models():
+    import math
+    from src.cox import ajustar_cox, preparar_estratificat, taula_hazard_ratios
+    from src.grafics import fig_forest
+    from src.preparacio import codificar_cox
+    df = carregar_dades()
+    for cph in (ajustar_cox(codificar_cox(df)),
+                ajustar_cox(preparar_estratificat(df), strata=["Contract"])):
+        eix = fig_forest(taula_hazard_ratios(cph), "t").layout.xaxis
+        assert eix.type == "log"
+        assert tuple(round(v, 3) for v in eix.range) == (round(math.log10(0.04), 3), round(math.log10(4), 3))

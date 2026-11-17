@@ -42,3 +42,22 @@ def test_scores_marquen_clients_actius():
     df = carregar_dades()
     s = generar_scores(df)
     assert (s["client_actiu"].values == (df["event"].values == 0).astype(int)).all()
+
+
+def test_corba_perfil_comenca_al_100_i_coincideix_amb_lifelines():
+    import numpy as np
+    from src.cox import ajustar_cox
+    from src.preparacio import codificar_cox, codificar_perfil
+    from src.risc_temporal import corba_perfil
+    df = carregar_dades()
+    X = codificar_cox(df)
+    cph = ajustar_cox(X)
+    cols = list(X.columns.drop(["duration", "event"]))
+    fila = codificar_perfil(dict(Contract="Month-to-month", InternetService="Fiber optic",
+                                 PaymentMethod="Electronic check", MonthlyCharges=85.0,
+                                 OnlineSecurity="No", TechSupport="No", PaperlessBilling="Yes",
+                                 Partner="No", Dependents="No", SeniorCitizen=0), cols)
+    s = corba_perfil(cph, fila)
+    assert s.loc[0] == 1.0 and list(s.index) == list(range(73))
+    ref = cph.predict_survival_function(fila, times=np.arange(1, 73)).iloc[:, 0].to_numpy()
+    assert np.allclose(s.loc[1:].to_numpy(), ref)

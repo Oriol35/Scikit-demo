@@ -28,7 +28,8 @@ from src.km import (NOMS_VARIABLES, VARIABLES_KM, afegir_quartils_quota,  # noqa
                     ajustar_km, logrank, taula_medianes)
 from src.preparacio import (RUTA_DADES, carregar_dades, codificar_cox,  # noqa: E402
                             codificar_perfil, dividir_train_test)
-from src.risc_temporal import generar_scores, hazard_mensual, mesos_critics  # noqa: E402
+from src.risc_temporal import (corba_perfil, generar_scores, hazard_mensual,  # noqa: E402
+                               mesos_critics)
 
 DIR_OUTPUTS = Path(os.environ.get("DIR_OUTPUTS", ARREL / "outputs"))
 GRAFIC = dict(theme=None, config={"displaylogo": False})
@@ -271,13 +272,12 @@ with tabs[4]:
                 "prevista pel model de Cox.")
     cA, cB, cG = st.columns([1, 1, 2.4])
     corbes, resultats = {}, {}
-    temps = np.arange(0, 73)
     for clau, col in [("A", cA), ("B", cB)]:
         with col:
             st.subheader(f"Perfil {clau}")
             perfil = controls_perfil(clau)
         fila = codificar_perfil(perfil, M["columnes"])
-        s = M["cph_total"].predict_survival_function(fila, times=temps).iloc[:, 0]
+        s = corba_perfil(M["cph_total"], fila)
         corbes[f"Perfil {clau}"] = s
         resultats[clau] = {"S6": float(s.loc[6]), "S12": float(s.loc[12]),
                            "clv": float(s.loc[1:24].sum() * perfil["MonthlyCharges"])}

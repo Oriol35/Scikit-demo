@@ -29,6 +29,16 @@ from src.km import (NOMS_VARIABLES, VARIABLES_KM, afegir_quartils_quota,  # noqa
 from src.preparacio import (RUTA_DADES, carregar_dades, codificar_cox,  # noqa: E402
                             codificar_perfil, dividir_train_test)
 from src.risc_temporal import generar_scores, hazard_mensual, mesos_critics  # noqa: E402
+from src.classificacio import (AJUDA_METRIQUES, DESCRIPCIONS_MODELS,  # noqa: E402
+                               DESCRIPCIONS_TRACTAMENTS, MODELS, TRACTAMENTS, ajustar_tots,
+                               avaluar, cami_arbre, campanya, codificar_perfil_classificacio,
+                               corba_guanys, corba_roc, estructura_arbre, frase_metriques,
+                               importancia_variables, interpretar_or, nodes_cami, odds_ratios,
+                               preparar_dades, probabilitats, smote_disponible,
+                               taula_comparativa)
+from src.grafics_classificacio import (fig_arbre, fig_confusio, fig_guanys,  # noqa: E402
+                                       fig_importancia, fig_odds_ratios,
+                                       fig_probabilitats_perfil, fig_roc)
 
 DIR_OUTPUTS = Path(os.environ.get("DIR_OUTPUTS", ARREL / "outputs"))
 GRAFIC = dict(theme=None, config={"displaylogo": False})
@@ -106,7 +116,7 @@ with st.sidebar:
                .replace(",", "."))
 
 tabs = st.tabs(["Resum", "Kaplan-Meier", "Model de Cox", "Risc temporal",
-                "Simulador de client", "Risc × valor"])
+                "Simulador de client", "Risc × valor", "Classificació"])
 
 # ---------- 1. Resum ----------
 with tabs[0]:
@@ -332,3 +342,199 @@ with tabs[5]:
         seg["CLV esperat 24m (tots)"] = pt["clv"].map(euros).values
         seg["Diferència CLV"] = (pt["clv"] - pa["clv"]).map(lambda v: "+" + euros(v)).values
     st.dataframe(seg, hide_index=True, width="stretch")
+
+# ---------- 7. Classificació ----------
+@st.cache_resource(show_spinner="Preparant les dades de classificació…")
+def dades_classificacio() -> dict:
+    return preparar_dades(models()["df"])
+
+
+@st.cache_resource(show_spinner="Entrenant els models de classificació…")
+def models_classificacio(tractament: str) -> dict:
+    d = dades_classificacio()
+    ms = ajustar_tots(tractament, d)
+    return {"models": ms, "probs": {n: probabilitats(m, d["X_te"]) for n, m in ms.items()}}
+
+
+@st.cache_data(show_spinner="Calculant la importància de les variables…")
+def importancia_classificacio(nom: str, tractament: str) -> pd.DataFrame:
+    d = dades_classificacio()
+    model = models_classificacio(tractament)["models"][nom]
+    return importancia_variables(model, d["X_te"], d["y_te"], repeticions=3)
+
+
+OPCIONS_CL = {
+    **OPCIONS,
+    "gender": ["Female", "Male"],
+}
+SERVEIS_CL = [("OnlineSecurity", "Seguretat en línia"), ("TechSupport", "Suport tècnic"),
+              ("OnlineBackup", "Còpia de seguretat en línia"),
+              ("DeviceProtection", "Protecció de dispositius"),
+              ("StreamingTV", "Televisió en streaming"), ("StreamingMovies", "Pel·lícules en streaming")]
+
+with tabs[6]:
+    st.markdown("Predir **qui** marxarà (sí o no) a partir de les característiques del client. Els "
+                "models aprenen amb el 80 % dels clients i s'avaluen amb el 20 % restant, que no han "
+                "vist mai: els **mateixos clients de prova** que el model de Cox.")
+    c1, c2, c3 = st.columns([1.3, 1.3, 1])
+    nom_model = c1.selectbox("Model", MODELS, key="cl_model",
+                             help="Quatre maneres d'aprendre a predir la baixa. A sota hi ha "
+                                  "l'explicació del model triat.")
+    tractament = c2.selectbox("Tractament del desequilibri de classes", TRACTAMENTS, index=1,
+                              key="cl_tractament",
+                              help="Només marxa el 27 % dels clients: sense tractament, els models "
+                                   "tendeixen a dir «no marxa». " + " ".join(
+                                       f"{k}: {v}" for k, v in DESCRIPCIONS_TRACTAMENTS.items()))
+    llindar = c3.slider("Llindar de decisió", 0.05, 0.95, 0.50, 0.05, key="cl_llindar",
+                        help=AJUDA_METRIQUES["llindar"])
+    st.info(DESCRIPCIONS_MODELS[nom_model])
+    st.caption(f"**Tractament «{tractament}»:** {DESCRIPCIONS_TRACTAMENTS[tractament]}")
+    if tractament == "SMOTE" and not smote_disponible():
+        st.warning("No s'ha pogut carregar la llibreria de SMOTE (imbalanced-learn) en aquest "
+                   "ordinador: es mostren els resultats amb **pesos de classe**. Sol passar a "
+                   "Windows 11 quan el Control intel·ligent d'aplicacions bloqueja una DLL.")
+        tractament = "Pesos de classe"
+
+    D = dades_classificacio()
+    R = models_classificacio(tractament)
+    p = R["probs"][nom_model]
+    mt = avaluar(D["y_te"], p, llindar)
+
+    # Rendiment del model seleccionat
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("AUC", dec(mt["auc"]), help=AJUDA_METRIQUES["auc"])
+    k2.metric("Recall", pct(mt["recall"]), help=AJUDA_METRIQUES["recall"])
+    k3.metric("Precision", pct(mt["precision"]), help=AJUDA_METRIQUES["precision"])
+    k4.metric("F1", dec(mt["f1"]), help=AJUDA_METRIQUES["f1"])
+    k5.metric("Exactitud", pct(mt["exactitud"]), help=AJUDA_METRIQUES["exactitud"])
+    st.markdown(frase_metriques(mt))
+    g1, g2 = st.columns(2)
+    with g1:
+        st.plotly_chart(fig_confusio(mt, f"Matriu de confusió · {nom_model}"), **GRAFIC)
+        st.caption("Compara la predicció amb el que va passar de veritat als 1.407 clients de prova. "
+                   "Blau = encerts; taronja = errors.")
+    with g2:
+        rocs = {n: corba_roc(D["y_te"], pr) for n, pr in R["probs"].items()}
+        aucs = {n: avaluar(D["y_te"], pr)["auc"] for n, pr in R["probs"].items()}
+        st.plotly_chart(fig_roc(rocs, aucs, nom_model, "Corbes ROC (tots els llindars)"), **GRAFIC)
+        st.caption("Cada punt de la corba és un llindar diferent. Com més amunt i a l'esquerra, "
+                   "millor: més baixes detectades amb menys falses alarmes. L'AUC és l'àrea sota "
+                   "la corba.")
+
+    # Interpretació
+    st.subheader("Per què decideix així?")
+    model_sel = R["models"][nom_model]
+    if nom_model == "Regressió logística":
+        ors = odds_ratios(model_sel, D["columnes"])
+        st.plotly_chart(fig_odds_ratios(ors, "Odds ratios de la regressió logística"), **GRAFIC)
+        st.caption("Mantenint la resta de variables iguals, un odds ratio < 1 (blau) redueix la "
+                   "probabilitat relativa de marxar i un > 1 (taronja) l'augmenta. Els contractes "
+                   "es comparen amb el mensual i el pagament amb el xec postal, com al model de Cox.")
+        with st.expander("Taula dels odds ratios amb interpretació"):
+            st.dataframe(pd.DataFrame({
+                "Variable": ors["nom"], "Odds ratio": ors["OR"].map(lambda v: dec(v, 2)),
+                "Interpretació": ors["OR"].map(interpretar_or)}), hide_index=True, width="stretch")
+            st.caption("La quota mensual surt amb poc efecte perquè és pràcticament la suma dels "
+                       "serveis contractats, que ja són al model: l'efecte es reparteix entre ells.")
+    elif nom_model == "Arbre de decisió":
+        est = estructura_arbre(model_sel, D["columnes"], D["X_tr"], D["y_tr"])
+        st.plotly_chart(fig_arbre(est, "Arbre de decisió: preguntes que ha après el model"), **GRAFIC)
+        st.caption("Es llegeix de dalt a baix. Cada caixa és una pregunta; les fulles (a baix) donen la "
+                   "probabilitat de baixa que assigna el model (taronja = risc alt). Passant el ratolí "
+                   "per sobre es veu quants clients reals hi ha i quants van marxar. Amb pesos o SMOTE, "
+                   "la probabilitat del model és més alta que la taxa real, perquè s'ha entrenat "
+                   "donant més pes a les baixes.")
+    else:
+        st.plotly_chart(fig_importancia(importancia_classificacio(nom_model, tractament),
+                                        f"Variables més importants · {nom_model}"), **GRAFIC)
+        st.caption("Importància per permutació: es barregen a l'atzar els valors d'una variable i es "
+                   "mira quant empitjora l'AUC. Si cau molt, el model en depenia. Indica **quant** "
+                   "pesa una variable, però no cap a on (per a això, la regressió logística).")
+    if nom_model in ("Regressió logística", "Arbre de decisió"):
+        with st.expander("Importància de les variables (comparable entre els quatre models)"):
+            st.plotly_chart(fig_importancia(importancia_classificacio(nom_model, tractament),
+                                            f"Variables més importants · {nom_model}"), **GRAFIC)
+
+    # Comparativa
+    st.subheader("Comparativa dels quatre models")
+    comp = taula_comparativa(R["models"], D, llindar, 0.10)
+    millor = comp.loc[comp["auc"].idxmax(), "model"]
+    st.dataframe(pd.DataFrame({
+        "Model": comp["model"], "AUC": comp["auc"].map(dec), "Recall": comp["recall"].map(pct),
+        "Precision": comp["precision"].map(pct), "F1": comp["f1"].map(dec),
+        "Exactitud": comp["exactitud"].map(pct), "Lift (10 %)": comp["lift"].map(lambda v: dec(v, 2)),
+    }), hide_index=True, width="stretch")
+    st.caption(f"Amb el tractament «{tractament}» i llindar {dec(llindar, 2)}. Millor AUC: "
+               f"**{millor}**. Les diferències d'AUC entre models són petites: les variables "
+               "importants (antiguitat, contracte, internet) les capten tots.")
+
+    # Campanya
+    st.subheader("De la predicció a l'acció: campanya de retenció")
+    pct_c = st.slider("Percentatge de clients a contactar", 5, 50, 10, 5, format="%d %%",
+                      key="cl_pct", help="L'empresa ordena els clients de més a menys risc segons el "
+                                         "model i truca als primers.")
+    cmp = campanya(D["y_te"], p, pct_c / 100)
+    q1, q2, q3, q4 = st.columns(4)
+    q1.metric("Clients contactats", f"{cmp['contactats']:,}".replace(",", "."))
+    q2.metric("Baixes detectades", f"{cmp['baixes_detectades']} de {cmp['baixes_totals']}")
+    q3.metric("Baixes capturades", pct(cmp["pct_capturat"]),
+              help="Percentatge de totes les baixes que cauen dins dels clients contactats.")
+    q4.metric("Lift", dec(cmp["lift"], 2), help=AJUDA_METRIQUES["lift"])
+    st.markdown(f"Trucant al **{pct_c} %** de clients amb més risc ({cmp['contactats']}), es troben "
+                f"**{cmp['baixes_detectades']}** dels {cmp['baixes_totals']} que marxaran: "
+                f"**{dec(cmp['lift'], 1)} vegades** més que triant-los a l'atzar (on se'n trobarien "
+                f"≈ {round(cmp['contactats'] * cmp['taxa_base'])}).")
+    guanys = {n: corba_guanys(D["y_te"], pr) for n, pr in R["probs"].items()}
+    st.plotly_chart(fig_guanys(guanys, nom_model, pct_c / 100, "Corba de guanys"), **GRAFIC)
+    st.caption("Com més s'allunya la corba de la diagonal (atzar), més útil és el model per "
+               "prioritzar trucades amb un pressupost limitat.")
+
+    # Simulador
+    st.subheader("Simulador: prova un client")
+    st.markdown("Configura un client i mira quina probabilitat de baixa li dona cada model.")
+    s1, s2, s3 = st.columns(3)
+    pc = {}
+    with s1:
+        for var in ["Contract", "InternetService", "PaymentMethod"]:
+            pc[var] = st.selectbox(NOMS_VARIABLES[var], OPCIONS_CL[var], format_func=traduir,
+                                   key=f"cl_{var}",
+                                   index=OPCIONS_CL[var].index(PERFILS_INICIALS["A"][var]))
+        pc["tenure"] = st.slider("Antiguitat (mesos)", 1, 72, 3, key="cl_tenure")
+        sense_int = pc["InternetService"] == "No"
+        mn, mx = M["rang_quota"][sense_int]
+        pc["MonthlyCharges"] = st.slider("Quota mensual", mn, mx, min(max(85.0, mn), mx), 1.0,
+                                         format="%.0f €",
+                                         key=f"cl_mc_{'sense' if sense_int else 'amb'}_internet")
+    with s2:
+        for var, nom in SERVEIS_CL:
+            pc[var] = "Yes" if (st.checkbox(nom, key=f"cl_{var}", disabled=sense_int)
+                                and not sense_int) else "No"
+        pc["PhoneService"] = "Yes" if st.checkbox("Té telefonia", value=True, key="cl_ph") else "No"
+        pc["MultipleLines"] = "Yes" if (st.checkbox("Diverses línies", key="cl_ml",
+                                                    disabled=pc["PhoneService"] == "No")
+                                        and pc["PhoneService"] == "Yes") else "No"
+    with s3:
+        pc["PaperlessBilling"] = "Yes" if st.checkbox("Factura electrònica", value=True,
+                                                      key="cl_pb") else "No"
+        pc["Partner"] = "Yes" if st.checkbox("Té parella", key="cl_pa") else "No"
+        pc["Dependents"] = "Yes" if st.checkbox("Té persones a càrrec", key="cl_de") else "No"
+        pc["SeniorCitizen"] = int(st.checkbox("Client sènior", key="cl_se"))
+        pc["gender"] = st.radio("Gènere", ["Female", "Male"], horizontal=True, key="cl_gender",
+                                format_func=lambda v: "Dona" if v == "Female" else "Home")
+    fila_cl = codificar_perfil_classificacio(pc, D["columnes"])
+    probs_perfil = {n: float(probabilitats(m, fila_cl)[0]) for n, m in R["models"].items()}
+    st.plotly_chart(fig_probabilitats_perfil(probs_perfil, llindar, nom_model,
+                                             "Probabilitat de baixa segons cada model"), **GRAFIC)
+    risc = "en risc" if probs_perfil[nom_model] >= llindar else "fora de risc"
+    st.markdown(f"Segons el model **{nom_model}**, aquest client té una probabilitat de baixa del "
+                f"**{pct(probs_perfil[nom_model])}**: amb el llindar {dec(llindar, 2)} queda "
+                f"**{risc}**.")
+    arbre = R["models"]["Arbre de decisió"]
+    est_cl = estructura_arbre(arbre, D["columnes"], D["X_tr"], D["y_tr"])
+    with st.expander("Camí que segueix aquest client a l'arbre de decisió",
+                     expanded=nom_model == "Arbre de decisió"):
+        passos = cami_arbre(arbre, fila_cl, est_cl)
+        st.markdown("\n".join(f"{i}. {pas['pregunta']} → **{pas['resposta']}**"
+                              for i, pas in enumerate(passos, 1)))
+        st.plotly_chart(fig_arbre(est_cl, "Recorregut del client a l'arbre",
+                                  nodes_cami(arbre, fila_cl)), **GRAFIC)

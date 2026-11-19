@@ -54,6 +54,17 @@ def risc_base_acumulat(cph: CoxPHFitter, temps: np.ndarray, finestra: int = 12) 
     return np.where(temps > t_max, valors.loc[t_max] + pendent * (temps - t_max), dins)
 
 
+def corba_perfil(cph: CoxPHFitter, fila: pd.DataFrame, horitzo: int = MAX_MES) -> pd.Series:
+    """S(t) d'un client nou (antiguitat 0) per t = 0..horitzo, amb S(0) = 1.
+
+    lifelines avalua t = 0 amb el primer valor del risc base (mes 1), i la corba començaria per
+    sota del 100 %. Aquí H0(0) = 0 per definició.
+    """
+    ph = float(np.asarray(cph.predict_partial_hazard(fila), dtype=float)[0])
+    t = np.arange(0, horitzo + 1)
+    return pd.Series(np.exp(-risc_base_acumulat(cph, t) * ph), index=t)
+
+
 def supervivencia_condicional(cph: CoxPHFitter, df_cod: pd.DataFrame,
                               horitzo: int = 24) -> pd.DataFrame:
     """P(continuar sent client d'aquí a t mesos | antiguitat actual), t = 0..horitzo.

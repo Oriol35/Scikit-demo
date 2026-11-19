@@ -116,6 +116,17 @@ with st.sidebar:
     st.caption(f"{len(df):,} clients · {M['n_exclosos']} registres amb antiguitat 0 exclosos"
                .replace(",", "."))
 
+# Pestanya «Classificació» (part de Joan): en verd quan està seleccionada o amb el ratolí
+# a sobre, per distingir l'autor.
+COLOR_CLASSIFICACIO = "#2e7d32"
+# data-key="6" és la 7a pestanya (es compta des de 0).
+st.markdown(f"""<style>
+.stTabs [data-testid="stTab"][data-key="6"][aria-selected="true"] p,
+.stTabs [data-testid="stTab"][data-key="6"]:hover p {{
+    color: {COLOR_CLASSIFICACIO}; }}
+.stTabs [data-testid="stTab"][data-key="6"] .react-aria-SelectionIndicator {{
+    background-color: {COLOR_CLASSIFICACIO}; border-color: {COLOR_CLASSIFICACIO}; }}
+</style>""", unsafe_allow_html=True)
 tabs = st.tabs(["Resum", "Kaplan-Meier", "Model de Cox", "Risc temporal",
                 "Simulador de client", "Risc × valor", "Classificació"])
 

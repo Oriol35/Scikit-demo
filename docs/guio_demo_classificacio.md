@@ -1,4 +1,4 @@
-# Guió de la demo — part de classificació (≈ 5 min)
+# Guió de la demo — part de classificació i acció (≈ 6–7 min)
 
 **Abans de començar**
 - Obrir el dashboard (en línia o amb `demo.bat`) i anar a la pestanya **Classificació**.
@@ -69,6 +69,23 @@
 
 > «El classificador ens diu **a qui** trucar; la supervivència ens diu **quan**.»
 
+## 7. Perfils i campanyes (≈ 1 min 30 s)
+
+- Pestanya **Perfils i campanyes**. Mapa de calor:
+
+> «El risc és gairebé tot del contracte mensual: als primers 6 mesos marxa el 55 % dels clients;
+> amb contracte d'1 any, al voltant del 10 %.»
+
+- Recórrer els quatre perfils, cadascun amb la seva campanya: benvinguda, pas a anual, suport i
+  seguretat, domiciliació.
+- Simulador (20 % accepten, 10 % de descompte):
+
+> «En l'escenari optimista la campanya d'anual guanya ≈ 15.500 €; en el prudent en perd ≈ 3.200 €.
+> Només surt a compte si l'efecte real és com a mínim el 59 % del màxim. Per això proposem un pilot
+> amb grup de control: és la idea de l'uplift modeling.»
+
+- (Opcional) Pujar el descompte al 30 %: la campanya ja no surt a compte ni en l'escenari optimista.
+
 ---
 
 ## Pla B (si el dashboard no arrenca)
@@ -83,6 +100,9 @@ Gràfics exportats a `figures/` (HTML interactiu i PNG):
 | Arbre de decisió | `cl_arbre.html` |
 | Importància de les variables | `cl_importancia.html` |
 | Corba de guanys (campanya) | `cl_guanys.html` |
+| Mapa de calor contracte × antiguitat | `pf_mapa_calor.html` |
+| Perfils de risc vs. referència | `pf_perfils.html` |
+| Simulador de la campanya d'anual | `pf_campanya.html` |
 
 ---
 
@@ -102,3 +122,6 @@ Conjunt de prova: 1.407 clients, 374 baixes. Llindar 0,5. Tractament: pesos de c
 | Campanya (gradient boosting) | 10 % contactat → 102 baixes (27 %), lift 2,7 · 20 % → 186 baixes (50 %), lift 2,5 |
 | Comparació amb Cox (mateixos clients de prova) | correlació de rangs 0,89 · coincidència del 20 % de més risc 67 % · AUC del risc de Cox 0,79 |
 | Limitacions | dataset transversal (sense finestres d'observació/predicció); `tenure` com a variable afavoreix el classificador; llindar sense costos reals; sense p-valors a la logística de scikit-learn |
+| Taxa de baixa contracte × antiguitat | Mensual 55 % (1–6 m) · 42 % · 38 % · 33 % · 26 % (49–72 m) · 1 any 8–13 % · 2 anys 0–3 % |
+| Perfils (taxa vs. referència · actius · baixes esperades 12 m) | Nous mensuals 55 % vs 36 % · 633 · ≈ 139 — Mensuals consolidats 34 % vs 12 % · 1.303 · ≈ 338 — Fibra sense suport ni seguretat 61 % vs 28 % · 599 · ≈ 209 — Xec electrònic 54 % vs 33 % · 856 · ≈ 264 |
+| Campanya d'anual (20 % accepten, 10 % descompte) | risc 12 m 26 % · reducció màxima 66 % · optimista ≈ 45 baixes evitades, +15.500 € · prudent ≈ 22, −3.200 € · efecte mínim rendible 59 % |

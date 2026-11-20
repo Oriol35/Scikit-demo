@@ -6,9 +6,10 @@
 data/        dataset original
 docs/        informe metodològic i guions de la demo (supervivència i classificació)
 src/         codi comú de notebooks i dashboard (preparació, Kaplan-Meier, Cox, risc temporal,
-             classificació, gràfics)
-notebooks/   01 preparació · 02 Kaplan-Meier · 03 Cox · 04 risc temporal i CLV · 05 classificació
-app/         dashboard Streamlit per a la demo (inclou la pestanya Classificació)
+             classificació, perfils i campanyes, gràfics)
+notebooks/   01 preparació · 02 Kaplan-Meier · 03 Cox · 04 risc temporal i CLV · 05 classificació ·
+             06 perfils i campanyes
+app/         dashboard Streamlit per a la demo (inclou les pestanyes Classificació i Perfils i campanyes)
 figures/     gràfics exportats (HTML interactiu sense internet + PNG per a l'informe)
 outputs/     scores_supervivencia.csv (risc, supervivència i CLV per client)
 tests/       proves automàtiques (pytest)

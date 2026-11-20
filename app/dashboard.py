@@ -40,6 +40,10 @@ from src.classificacio import (AJUDA_METRIQUES, DESCRIPCIONS_MODELS,  # noqa: E4
 from src.grafics_classificacio import (fig_arbre, fig_confusio, fig_guanys,  # noqa: E402
                                        fig_importancia, fig_odds_ratios,
                                        fig_probabilitats_perfil, fig_roc)
+from src.perfils import (ESCENARIS, PERFILS_PER_CLAU, actius_perfil,  # noqa: E402
+                         efecte_minim_rendible, reduccio_maxima, resum_perfils, simular_campanya,
+                         taula_contracte_tram)
+from src.grafics_perfils import fig_campanya, fig_mapa_calor, fig_perfils  # noqa: E402
 
 DIR_OUTPUTS = Path(os.environ.get("DIR_OUTPUTS", ARREL / "outputs"))
 GRAFIC = dict(theme=None, config={"displaylogo": False})
@@ -116,19 +120,19 @@ with st.sidebar:
     st.caption(f"{len(df):,} clients · {M['n_exclosos']} registres amb antiguitat 0 exclosos"
                .replace(",", "."))
 
-# Pestanya «Classificació» (part de Joan): en verd quan està seleccionada o amb el ratolí
-# a sobre, per distingir l'autor.
+# Pestanyes de Joan («Classificació» i «Perfils i campanyes»): en verd quan estan seleccionades
+# o amb el ratolí a sobre, per distingir l'autor.
 COLOR_CLASSIFICACIO = "#2e7d32"
-# data-key="6" és la 7a pestanya (es compta des de 0).
+# data-key és la posició de la pestanya, comptant des de 0 (6 = 7a, 7 = 8a).
 st.markdown(f"""<style>
-.stTabs [data-testid="stTab"][data-key="6"][aria-selected="true"] p,
-.stTabs [data-testid="stTab"][data-key="6"]:hover p {{
+.stTabs [data-testid="stTab"]:is([data-key="6"], [data-key="7"])[aria-selected="true"] p,
+.stTabs [data-testid="stTab"]:is([data-key="6"], [data-key="7"]):hover p {{
     color: {COLOR_CLASSIFICACIO}; }}
-.stTabs [data-testid="stTab"][data-key="6"] .react-aria-SelectionIndicator {{
+.stTabs [data-testid="stTab"]:is([data-key="6"], [data-key="7"]) .react-aria-SelectionIndicator {{
     background-color: {COLOR_CLASSIFICACIO}; border-color: {COLOR_CLASSIFICACIO}; }}
 </style>""", unsafe_allow_html=True)
 tabs = st.tabs(["Resum", "Kaplan-Meier", "Model de Cox", "Risc temporal",
-                "Simulador de client", "Risc × valor", "Classificació"])
+                "Simulador de client", "Risc × valor", "Classificació", "Perfils i campanyes"])
 
 # ---------- 1. Resum ----------
 with tabs[0]:
@@ -549,3 +553,91 @@ with tabs[6]:
                               for i, pas in enumerate(passos, 1)))
         st.plotly_chart(fig_arbre(est_cl, "Recorregut del client a l'arbre",
                                   nodes_cami(arbre, fila_cl)), **GRAFIC)
+
+# ---------- 8. Perfils i campanyes ----------
+with tabs[7]:
+    st.markdown("De la predicció a l'acció: **quins grups de clients** tenen més risc de marxar i "
+                "**quina campanya** se'ls pot oferir. Els perfils són senzills d'explicar al negoci i "
+                "el risc dels clients actius és la probabilitat de marxar en els **propers 12 mesos** "
+                "segons el model de Cox.")
+
+    st.subheader("On es concentra el risc")
+    taxa_ct, n_ct = taula_contracte_tram(df)
+    st.plotly_chart(fig_mapa_calor(taxa_ct, n_ct, "Taxa de baixa per contracte i antiguitat"),
+                    **GRAFIC)
+    st.caption(f"El risc es concentra en el **contracte mensual**: als primers 6 mesos marxa el "
+               f"{pct(taxa_ct.loc['Mensual', '1–6'])} dels clients, i encara amb 1–2 anys "
+               f"d'antiguitat el {pct(taxa_ct.loc['Mensual', '13–24'])}. Amb contracte d'1 any la "
+               f"taxa es manté al voltant del 10 % i amb 2 anys és pràcticament nul·la. "
+               f"n = nombre de clients de cada casella.")
+
+    st.subheader("Perfils de risc i campanyes recomanades")
+    sc_pf = scores(str(DIR_OUTPUTS))
+    resum_pf = resum_perfils(df, sc_pf)
+    st.plotly_chart(fig_perfils(resum_pf, "Taxa de baixa de cada perfil vs. un grup de referència"),
+                    **GRAFIC)
+    for i, fila in resum_pf.iterrows():
+        perfil = PERFILS_PER_CLAU[fila["clau"]]
+        with st.container(border=True):
+            st.markdown(f"**{i + 1}. {perfil.nom}** · {perfil.qui}")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Han marxat", pct(fila["taxa"]),
+                      f"{dec(fila['diferencia_pp'], 0)} punts vs. referència", delta_color="inverse",
+                      help=f"Percentatge de clients del perfil que han marxat. Referència: "
+                           f"{fila['referencia']} ({pct(fila['taxa_ref'])}).")
+            m2.metric("Clients actius", f"{fila['actius']:,}".replace(",", "."),
+                      help="Clients del perfil que encara són clients: els únics que es poden retenir.")
+            m3.metric("Baixes esperades (12 mesos)", f"≈ {fila['baixes_esperades_12m']:.0f}",
+                      help="Suma de la probabilitat de marxar en 12 mesos (model de Cox) dels clients "
+                           "actius del perfil.")
+            m4.metric("Ingressos mensuals en risc", euros(fila["ingressos_risc_mes"]),
+                      help="Quota mensual dels clients actius ponderada per la seva probabilitat de "
+                           "marxar en 12 mesos.")
+            st.markdown(f"**Campanya: {perfil.campanya}.** {perfil.accio}")
+    st.caption("Un mateix client pot pertànyer a més d'un perfil (p. ex. nou, amb fibra i xec "
+               "electrònic): les xifres no s'han de sumar. La taxa de baixa és històrica; el risc a "
+               "12 mesos només es calcula per als clients que encara hi són, i per això no coincideixen.")
+
+    st.subheader("Simulador: campanya de pas a contracte anual")
+    st.markdown("Oferta als **clients mensuals consolidats** (12 mesos o més): un descompte a canvi de "
+                "passar a contracte d'1 any. Mou els controls per veure si la campanya surt a compte.")
+    actius_mc = actius_perfil(df, sc_pf, "mensuals_consolidats")
+    red = reduccio_maxima(df)
+    v1, v2 = st.columns(2)
+    accepten = v1.slider("Clients que accepten l'oferta", 5, 50, 20, 5, format="%d %%", key="pf_accepten",
+                         help="Percentatge dels clients mensuals consolidats que passen a contracte anual.")
+    descompte = v2.slider("Descompte ofert durant 12 mesos", 0, 30, 10, 5, format="%d %%",
+                          key="pf_descompte",
+                          help="El descompte el reben TOTS els que accepten, també els que no haurien marxat.")
+    res_pf = {e: simular_campanya(actius_mc, accepten / 100, descompte / 100, red, f)
+              for e, f in ESCENARIS.items()}
+    c_opt, c_pru = st.columns(2)
+    for col, esc in [(c_opt, "Optimista"), (c_pru, "Prudent")]:
+        r = res_pf[esc]
+        with col.container(border=True):
+            st.markdown(f"**Escenari {esc.lower()}** · el risc baixa un "
+                        f"{pct(red * ESCENARIS[esc])}")
+            a1, a2, a3 = st.columns(3)
+            a1.metric("Accepten", f"{r['accepten']:,}".replace(",", "."))
+            a2.metric("Baixes evitades", f"≈ {r['baixes_evitades']:.0f}")
+            a3.metric("Benefici net", euros(r["benefici"]),
+                      help="Ingressos salvats (quotes que no es perden en 12 mesos) menys el cost "
+                           "del descompte.")
+    st.plotly_chart(fig_campanya(res_pf, "Resultat econòmic de la campanya en 12 mesos"), **GRAFIC)
+    minim = efecte_minim_rendible(res_pf["Optimista"]["risc_mitja"], red, descompte / 100)
+    st.markdown(
+        f"**Com es llegeix.** Dels {len(actius_mc):,} clients mensuals consolidats actius, un "
+        f"{pct(res_pf['Optimista']['risc_mitja'])} marxarien en 12 mesos. Els clients d'1 any amb la "
+        f"mateixa antiguitat marxen un {pct(red)} menys, però aquesta diferència és un **màxim**: "
+        f"part es deu al contracte (marxar té penalització) i part a **qui tria** el contracte anual "
+        f"(clients ja més fidels). L'escenari **optimista** suposa tota la reducció; el **prudent**, "
+        f"la meitat.".replace(f"{len(actius_mc):,}", f"{len(actius_mc):,}".replace(",", ".")))
+    if np.isfinite(minim) and minim <= 1:
+        st.info(f"Amb un descompte del {descompte} %, la campanya només surt a compte si l'efecte real "
+                f"és com a mínim el **{pct(minim)}** de l'efecte màxim. Per saber-ho cal fer un "
+                f"**pilot amb grup de control** (una part dels clients rep l'oferta i una altra no): és "
+                f"la idea de l'**uplift modeling**, que identifica els clients que canvien de decisió "
+                f"gràcies a l'oferta.")
+    else:
+        st.warning(f"Amb un descompte del {descompte} %, la campanya no surt a compte ni tan sols "
+                   f"amb l'efecte màxim: el descompte costa més del que es recupera.")

@@ -4,7 +4,7 @@ from src.preparacio import ARREL
 
 APP = str(ARREL / "app" / "dashboard.py")
 PESTANYES = ["Resum", "Kaplan-Meier", "Model de Cox", "Risc temporal",
-             "Simulador de client", "Risc × valor", "Classificació"]
+             "Simulador de client", "Risc × valor", "Classificació", "Perfils i campanyes"]
 
 
 def test_app_arrenca_sense_errors():

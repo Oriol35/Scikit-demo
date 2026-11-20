@@ -36,3 +36,16 @@ def test_simulador_classificacio_mostra_cami_arbre():
     assert not at.exception
     md = " ".join(m.value for m in at.markdown)
     assert "Resultat" in md and "probabilitat de baixa" in md
+
+
+def test_pestanya_perfils_i_simulador():
+    at = _app()
+    assert not at.exception
+    labels = [m.label for m in at.metric]
+    assert "Baixes esperades (12 mesos)" in labels and "Benefici net" in labels
+    at.slider(key="pf_descompte").set_value(30).run()
+    assert not at.exception
+    at.slider(key="pf_descompte").set_value(0)
+    at.slider(key="pf_accepten").set_value(50).run()
+    assert not at.exception
+    assert any("pilot amb grup de control" in i.value for i in at.info)
